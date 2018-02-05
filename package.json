@@ -1,0 +1,5 @@
+{
+    "scripts": {
+    "debug": "node --nolazy --inspect-brk=9229 app.js dc4d6142470d8a8a8ca61a83a6d1d351 1229046 2017-12"
+  }
+}
