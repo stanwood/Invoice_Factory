@@ -1,5 +1,6 @@
 var request = require('request');
 var base64 = require('base-64');
+var dateFormat = require('dateformat');
 
 var togglKey = process.argv[2];
 var debitoorKey = process.argv[3];
@@ -12,7 +13,8 @@ var customers = [];
 
 var regexMonth = /20\d{2}-(0|1)\d/i;
 var togglSummaryUrl = "https://toggl.com/reports/api/v2/summary";
-var togglDetailsUrl = "https://toggl.com/reports/api/v2/details.pdf";
+var togglDetailsUrl = "http://stanwood-invoice-factory.appspot.com/toggl/reports/api/v2/details.pdf"
+//var togglDetailsUrl = "https://toggl.com/reports/api/v2/details.pdf";
 var debitoorUrl = "https://api.debitoor.com/api";
 var getProductsUrl = debitoorUrl + "/products/v1";
 var getCustomersUrl = debitoorUrl + "/customers/v1";
@@ -24,6 +26,10 @@ var togglHeaders = {
 };
 
 var paymentTermsId = 4; // 30 days https://developers.debitoor.com/api-reference#paymentterms
+
+var msecsInSecs = 1000;
+var minutesInHour = 60;
+var secondsInMinute = 60;
 
 var main = function () {
 
@@ -78,9 +84,11 @@ var getProjects = function () {
 		"user_agent": "stanwood",
 		"billable": true
 	}
+	var url = togglSummaryUrl + parametersToQuery(parameters);
+	console.log(url);
 	request(
 		{
-			url: togglSummaryUrl + parametersToQuery(parameters),
+			url: url,
 			headers: togglHeaders
 		},
 		function (error, response, body) {
@@ -144,49 +152,45 @@ var createInvoices = function () {
 			var customer = getCustomer(project);
 			if (product && customer) {
 				getAttachment(project);
-				//TODO: Remove this. This is just to stop the processing after the first invoice
+				//TODO: Test behind
 				return;
 			}
 		}
 	}
-
-	return;
 }
 
 var getProduct = function (project) {
 
 	var indexOf = project.title.project.indexOf(" - ");
 	var togglSku = project.title.project.substr(0, indexOf);
-	console.log("Time: " + project.time);
 
 	for (var j = 0; j < products.length; j++) {
 
 		var product = products[j];
 		var debitoorSku = product.sku
 		if (debitoorSku == togglSku) {
-			console.log(product);
+			//console.log(product);
 			return product;
 		}
 	}
-	console.error("Could not find product " + togglSku);
+	console.error("Could not find product for " + project.title.project);
 }
 
 var getCustomer = function (project) {
 
-	var indexOf = project.title.project.indexOf(" - ");
+	var indexOf = project.title.client.indexOf(" - ");
 	var togglSku = project.title.client.substr(0, indexOf);
-	console.log("Time: " + project.time);
 
 	for (var j = 0; j < customers.length; j++) {
 
 		var customer = customers[j];
 		var debitoorSku = customer.notes
 		if (debitoorSku == togglSku) {
-			console.log(customer);
+			//console.log(customer);
 			return customer;
 		}
 	}
-	console.error("Could not find customer " + togglSku);
+	console.error("Could not find customer for " + project.title.client);
 }
 
 var getAttachment = function (project) {
@@ -201,18 +205,21 @@ var getAttachment = function (project) {
 	}
 	var url = togglDetailsUrl + parametersToQuery(parameters);
 	console.log(url);
+	//console.log(headers);
 	request(
 		{
 			url: url,
-			headers: togglHeaders
+			headers: togglHeaders,
+			encoding: 'binary'
 		},
 		function (error, response, body) {
-			console.log('error:', error);
-			console.log('statusCode:', response && response.statusCode);
-			//console.log('body:', body);
 
 			if (response && response.statusCode == 200) {
 				uploadAttachment(body, project);
+			} else {
+				console.log('error:', error);
+				console.log('statusCode:', response && response.statusCode);
+				console.log('body:', body);
 			}
 		});
 }
@@ -220,43 +227,39 @@ var getAttachment = function (project) {
 var uploadAttachment = function (body, project) {
 
 	var parameters = {
-		"token": debitoorKey
-	}
+		"token": debitoorKey,
+		"fileName": 'worklog.pdf',
+	};
 	var url = uploadFilesUrl + parametersToQuery(parameters);
 	console.log(url);
 	var formData = {
-		custom_file: {
-			value: body,
-			options: {
-				filename: 'worklog.pdf',
-				contentType: 'application/pdf'
-			}
-		}
+		file: body
 	};
 	request.post({
 		url,
 		formData: formData
 	},
 		function (error, response, body) {
-			console.log('error:', error);
-			console.log('statusCode:', response && response.statusCode);
-			console.log('body:', body);
-
 			if (response && response.statusCode == 200) {
 				var fileId = JSON.parse(body).id;
 				createInvoice(project, fileId)
+			} else {
+				console.log("request body: ", requestBody);
+				console.log('error:', error);
+				console.log('statusCode:', response && response.statusCode);
+				console.error('response body: ', body);
 			}
 		});
 }
 
 var createInvoice = function (project, fileId) {
 
-	var today = new Date;
-	var invoiceNumber = "CIN20170206"
-	var notes = project.notes;
-
 	var product = getProduct(project);
 	var customer = getCustomer(project);
+
+	var today = new Date;
+	var todayDateString = dateFormat(today, "yyyy-mm-dd");
+	var invoiceNumber = product.sku + dateFormat(today, "yyyymmdd"); //" " to force string
 
 	var parameters = {
 		"token": debitoorKey
@@ -265,24 +268,22 @@ var createInvoice = function (project, fileId) {
 	console.log(url);
 
 	//TODO: Check JLR
-	var languageCode = customer.countryCode == "GB" ? "de-DE" : "en-GB";
+	var languageCode = customer.countryCode == "GB" ? "en-GL" : "de-DE"; //No idea why "GL"
+
 	var invoice =
 		{
-			companyProfile: {
-				taxEnabled: taxEnabled,
-				cashAccounting: false,
-				companyNumber: companyNumber
-			},
 			number: invoiceNumber,
-			type: "invoice",
-			notes: notes,
-			date: today,
+			notes: product.description ? product.description : "",
+			date: todayDateString,
 			paymentTermsId: paymentTermsId,
 			customerId: customer.id,
 			lines: [
 				{
-					quantity: project.time / 3600,
+					quantity: Math.round(project.time / (msecsInSecs * minutesInHour * secondsInMinute)),
 					productId: product.id,
+					taxEnabled: product.taxEnabled,
+					taxRate: product.rate,
+					unitNetPrice: product.netUnitSalesPrice
 				}
 			],
 			languageCode: languageCode,
@@ -290,15 +291,22 @@ var createInvoice = function (project, fileId) {
 			]
 		}
 
-	request.post({
-		url: url,
-		formData: invoice
-	},
-		function (err, httpResponse, body) {
-			console.log('error:', error);
-			console.log('statusCode:', response && response.statusCode);
-			console.log('body:', body);
+	if (customer.countryCode != "DE") {
+		invoice.lines[0]["productOrService"] = "service";
+	}
 
+	var requestBody = JSON.stringify(invoice);
+	//console.log(body);
+
+	request.post({ url: url, body: requestBody },
+		function (error, response, body) {
+
+			if (response.statusCode != 200) {
+				console.log("request body:", requestBody);
+				console.log('error:', error);
+				console.log('statusCode:', response && response.statusCode);
+				console.error('response body:', body);
+			}
 		});
 }
 
@@ -306,7 +314,7 @@ var parametersToQuery = function (parameters) {
 	var query = "?";
 	for (var key in parameters) {
 		if (parameters.hasOwnProperty(key)) {
-			query = query + key + "=" + parameters[key] + "&";
+			query = query + "&" + key + "=" + parameters[key];
 		}
 	}
 	return query;

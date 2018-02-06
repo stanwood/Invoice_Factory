@@ -16,13 +16,12 @@ node.js
 
 ## Command
 
-	node app.js {toggl_key} {debitoor_key} {month} {project_key}
+	node app.js {toggl_key} {debitoor_key} {month}
 	
-	node app.js fsdf798sdfsd8fs7d9f8s7df 2018-01 LEN
+	node app.js fsdf798sdfsd8fs7d9f8s7df 2018-01
 	
 Parameter   	| Type   | Comment
 ------------	| ------ | ----------------------------------
 toggle_key  	| String | Required
 debitoor_key | String | Required
 month        | String | Format: `{year}-{month}`, Optional
-project_key  | String | Optional
