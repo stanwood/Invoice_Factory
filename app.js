@@ -2,6 +2,7 @@ var request = require('request');
 var base64 = require('base-64');
 var dateFormat = require('dateformat');
 
+
 var togglKey = process.argv[2];
 var debitoorKey = process.argv[3];
 var workspaceId = process.argv[4];
@@ -152,8 +153,6 @@ var createInvoices = function () {
 			var customer = getCustomer(project);
 			if (product && customer) {
 				getAttachment(project);
-				//TODO: Test behind
-				return;
 			}
 		}
 	}
@@ -232,15 +231,20 @@ var uploadAttachment = function (body, project) {
 	};
 	var url = uploadFilesUrl + parametersToQuery(parameters);
 	console.log(url);
+
+	var base64data = new Buffer(body, 'binary');
+
 	var formData = {
-		file: body
+		file: base64data
 	};
+
 	request.post({
 		url,
-		formData: formData
+		formData: formData,
 	},
 		function (error, response, body) {
 			if (response && response.statusCode == 200) {
+				console.log(body);
 				var fileId = JSON.parse(body).id;
 				createInvoice(project, fileId)
 			} else {

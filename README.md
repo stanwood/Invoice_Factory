@@ -8,6 +8,7 @@ node.js
 
 	npm install base-64
 	npm install request
+	npm install dateformat
 
 1. Toggl project names with this format: `{project_key} - Project name`
 2. Toggl client names with this format: `{client_key}`
@@ -16,12 +17,13 @@ node.js
 
 ## Command
 
-	node app.js {toggl_key} {debitoor_key} {month}
+	node app.js {toggl_key} {debitoor_key} {toggl_workspace} {month}
 	
 	node app.js fsdf798sdfsd8fs7d9f8s7df 2018-01
 	
-Parameter   	| Type   | Comment
-------------	| ------ | ----------------------------------
-toggle_key  	| String | Required
-debitoor_key | String | Required
-month        | String | Format: `{year}-{month}`, Optional
+Parameter   	| Type    | Comment
+--------------- | ------- | ----------------------------------
+toggl_key   	| String  | Required
+debitoor_key    | String  | Required
+toggl_workspace | Integer | Required
+month           | String  | Format: `{year}-{month}`, Optional
