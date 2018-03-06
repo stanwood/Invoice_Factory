@@ -267,7 +267,7 @@ var createInvoice = function (project, fileId) {
 
 	var today = new Date;
 	var todayDateString = dateFormat(today, "yyyy-mm-dd");
-	var invoiceNumber = product.sku + dateFormat(today, "yyyymmdd"); //" " to force string
+	var invoiceNumber = product.sku + month.replace("-", "") + dateFormat(today, "mmdd"); //" " to force string
 
 	var parameters = {
 		"token": debitoorKey
