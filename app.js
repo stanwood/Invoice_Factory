@@ -12,7 +12,7 @@ var projects = [];
 var products = [];
 var customers = [];
 
-var regexMonth = /20\d{2}-(0|1)\d/i;
+var regexMonth = /20\d{2}-(0|1)?\d/i;
 var togglSummaryUrl = "https://toggl.com/reports/api/v2/summary";
 var togglDetailsUrl = "http://stanwood-invoice-factory.appspot.com/toggl/reports/api/v2/details.pdf"
 //var togglDetailsUrl = "https://toggl.com/reports/api/v2/details.pdf";
@@ -31,6 +31,7 @@ var paymentTermsId = 4; // 30 days https://developers.debitoor.com/api-reference
 var msecsInSecs = 1000;
 var minutesInHour = 60;
 var secondsInMinute = 60;
+var today = new Date();
 
 var main = function () {
 
@@ -60,12 +61,10 @@ var main = function () {
 		return;
 	}
 	if (!month) {
-		var today = new Date();
 		var lastMonth = today.getMonth();
-		if (lastMonth < 10) {
-			lastMonth = "0" + lastMonth;
-		}
 		month = today.getFullYear() + "-" + lastMonth
+	} else {
+		today = new Date(month.substr(0,4), month.substr(6,2), 1)
 	}
 	if (!month.match(regexMonth)) {
 		console.error("Month must be in the format: 2018-11");
@@ -76,11 +75,16 @@ var main = function () {
 	getProjects();
 }
 
+var endOfMonth = function() {
+	var endOfMonth = new Date(today.getFullYear(), today.getMonth(), 0);
+	return endOfMonth.getFullYear() + "-" + (endOfMonth.getMonth() + 1) + "-" + endOfMonth.getDate();
+}
+
 var getProjects = function () {
 
 	var parameters = {
 		"since": month + "-01",
-		"until": month + "-31",
+		"until": endOfMonth(),
 		"workspace_id": workspaceId,
 		"user_agent": "stanwood",
 		"billable": true
@@ -196,7 +200,7 @@ var getAttachment = function (project) {
 
 	var parameters = {
 		"since": month + "-01",
-		"until": month + "-31",
+		"until": endOfMonth(),
 		"workspace_id": workspaceId,
 		"user_agent": "stanwood",
 		"billable": true,
@@ -239,9 +243,9 @@ var uploadAttachment = function (body, project) {
 	};
 
 	request.post({
-		url,
-		formData: formData,
-	},
+			url,
+			formData: formData,
+		},
 		function (error, response, body) {
 			if (response && response.statusCode == 200) {
 				console.log(body);
@@ -275,25 +279,25 @@ var createInvoice = function (project, fileId) {
 	var languageCode = customer.countryCode == "GB" ? "en-GL" : "de-DE"; //No idea why "GL"
 
 	var invoice =
-		{
-			number: invoiceNumber,
-			notes: product.description ? product.description : "",
-			date: todayDateString,
-			paymentTermsId: paymentTermsId,
-			customerId: customer.id,
-			lines: [
-				{
-					quantity: Math.round(project.time / (msecsInSecs * minutesInHour * secondsInMinute)),
-					productId: product.id,
-					taxEnabled: product.taxEnabled,
-					taxRate: product.rate,
-					unitNetPrice: product.netUnitSalesPrice
-				}
-			],
-			languageCode: languageCode,
-			attachments: [{ fileId: fileId }
-			]
-		}
+	{
+		number: invoiceNumber,
+		notes: product.description ? product.description : "",
+		date: todayDateString,
+		paymentTermsId: paymentTermsId,
+		customerId: customer.id,
+		lines: [
+			{
+				quantity: Math.round(project.time / (msecsInSecs * minutesInHour * secondsInMinute)),
+				productId: product.id,
+				taxEnabled: product.taxEnabled,
+				taxRate: product.rate,
+				unitNetPrice: product.netUnitSalesPrice
+			}
+		],
+		languageCode: languageCode,
+		attachments: [{ fileId: fileId }
+		]
+	}
 
 	if (customer.countryCode != "DE") {
 		invoice.lines[0]["productOrService"] = "service";
