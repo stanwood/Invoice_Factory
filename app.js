@@ -70,7 +70,6 @@ var main = function () {
 		console.error("Month must be in the format: 2018-11");
 		return;
 	}
-	console.log(month);
 
 	getProjects();
 }
@@ -146,6 +145,12 @@ var getCustomers = function () {
 		});
 }
 
+var togglSku = function(project) {
+	var indexOf = project.title.project.indexOf(" - ");
+	return project.title.project.substr(0, indexOf);
+}
+
+
 var createInvoices = function () {
 
 	for (var i = 0; i < projects.length; i++) {
@@ -155,7 +160,7 @@ var createInvoices = function () {
 		if (indexOf > 0) {
 			var product = getProduct(project);
 			var customer = getCustomer(project);
-			if (product && customer) {
+			if (product && customer && (projectKey == null || projectKey == togglSku(project))) {
 				getAttachment(project);
 			}
 		}
@@ -164,15 +169,12 @@ var createInvoices = function () {
 
 var getProduct = function (project) {
 
-	var indexOf = project.title.project.indexOf(" - ");
-	var togglSku = project.title.project.substr(0, indexOf);
-
 	for (var j = 0; j < products.length; j++) {
 
 		var product = products[j];
 		var debitoorSku = product.sku
-		if (debitoorSku == togglSku) {
-			//console.log(product);
+		if (debitoorSku == togglSku(project)) {
+			//console.log(project.title.project);
 			return product;
 		}
 	}
@@ -182,14 +184,14 @@ var getProduct = function (project) {
 var getCustomer = function (project) {
 
 	var indexOf = project.title.client.indexOf(" - ");
-	var togglSku = project.title.client.substr(0, indexOf);
+	var clientId = project.title.client.substr(0, indexOf);
 
 	for (var j = 0; j < customers.length; j++) {
 
 		var customer = customers[j];
 		var debitoorSku = customer.notes
-		if (debitoorSku == togglSku) {
-			//console.log(customer);
+		if (debitoorSku == clientId) {
+			//console.log(project.title.client);
 			return customer;
 		}
 	}
@@ -275,13 +277,16 @@ var createInvoice = function (project, fileId) {
 	var url = createInvoiceUrl + parametersToQuery(parameters);
 	console.log(url);
 
-	//TODO: Check JLR
 	var languageCode = customer.countryCode == "GB" ? "en-GL" : "de-DE"; //No idea why "GL"
+
+	var notes = product.description ? product.description : "";
+	var monthOfService = customer.countryCode == "GB" ? "\nMonth of service: " : "\nLeistungsmonat: ";
+	notes += monthOfService + month;
 
 	var invoice =
 	{
 		number: invoiceNumber,
-		notes: product.description ? product.description : "",
+		notes: notes,
 		date: todayDateString,
 		paymentTermsId: paymentTermsId,
 		customerId: customer.id,
@@ -291,7 +296,9 @@ var createInvoice = function (project, fileId) {
 				productId: product.id,
 				taxEnabled: product.taxEnabled,
 				taxRate: product.rate,
-				unitNetPrice: product.netUnitSalesPrice
+				unitNetPrice: product.netUnitSalesPrice,
+				unitId: 1,
+				productName: product.name
 			}
 		],
 		languageCode: languageCode,
