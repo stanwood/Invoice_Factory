@@ -14,8 +14,8 @@ var customers = [];
 
 var regexMonth = /20\d{2}-(0|1)?\d/i;
 var togglSummaryUrl = "https://toggl.com/reports/api/v2/summary";
-var togglDetailsUrl = "http://stanwood-invoice-factory.appspot.com/toggl/reports/api/v2/details.pdf"
-//var togglDetailsUrl = "https://toggl.com/reports/api/v2/details.pdf";
+//var togglDetailsUrl = "http://stanwood-invoice-factory.appspot.com/toggl/reports/api/v2/details.pdf"
+var togglDetailsUrl = "https://toggl.com/reports/api/v2/details.pdf";
 var debitoorUrl = "https://api.debitoor.com/api";
 var getProductsUrl = debitoorUrl + "/products/v1";
 var getCustomersUrl = debitoorUrl + "/customers/v1";
@@ -205,7 +205,6 @@ var getAttachment = function (project) {
 		"until": endOfMonth(),
 		"workspace_id": workspaceId,
 		"user_agent": "stanwood",
-		"billable": true,
 		"project_ids": project.id
 	}
 	var url = togglDetailsUrl + parametersToQuery(parameters);
