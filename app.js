@@ -1,49 +1,27 @@
 var request = require('request');
-var base64 = require('base-64');
 var dateFormat = require('dateformat');
+var fs = require('fs');
 
+var debitoorKey = process.argv[2];
+var projectKey = process.argv[3];
 
-var togglKey = process.argv[2];
-var debitoorKey = process.argv[3];
-var workspaceId = process.argv[4];
-var month = process.argv[5];
-var projectKey = process.argv[6];
-var projects = [];
+var logs = [];
 var products = [];
 var customers = [];
 
-var regexMonth = /20\d{2}-(0|1)?\d/i;
-var togglSummaryUrl = "https://toggl.com/reports/api/v2/summary";
-//var togglDetailsUrl = "http://stanwood-invoice-factory.appspot.com/toggl/reports/api/v2/details.pdf"
-var togglDetailsUrl = "https://toggl.com/reports/api/v2/details.pdf";
+var logsFilename = "hours.json"
 var debitoorUrl = "https://api.debitoor.com/api";
 var getProductsUrl = debitoorUrl + "/products/v1";
 var getCustomersUrl = debitoorUrl + "/customers/v1";
 var createInvoiceUrl = debitoorUrl + "/sales/draftinvoices/v3"
-var uploadFilesUrl = debitoorUrl + "/files/v1";
-var togglHeaders = {
-	"Authorization": "Basic " + base64.encode(togglKey + ":api_token"),
-	"Content-Type": "application/json"
-};
 
-var paymentTermsId = 4; // 30 days https://developers.debitoor.com/api-reference#paymentterms
-
-var msecsInSecs = 1000;
-var minutesInHour = 60;
-var secondsInMinute = 60;
-var today = new Date();
+var paymentTermsId = 3; // 30 days https://developers.debitoor.com/api-reference#paymentterms
 
 var main = function () {
 
+	console.log(debitoorKey);
+
 	// VALIDATE INPUTS
-	if (!togglKey) {
-		console.error("Missing Toggl API key");
-		return;
-	}
-	if (togglKey.length != 32) {
-		console.error("Toggl API key must be 32 chars. You gave " + togglKey.length + " chars.");
-		return;
-	}
 	if (!debitoorKey) {
 		console.error("Missing debitoor API key");
 		return;
@@ -52,59 +30,20 @@ var main = function () {
 		console.error("Debitoor API key must be 174 chars. You gave " + debitoorKey.length + " chars.");
 		return;
 	}
-	if (!workspaceId) {
-		console.error("Missing workspace ID");
-		return;
-	}
-	if (workspaceId.length != 7) {
-		console.error("API key must be 32 chars");
-		return;
-	}
-	if (!month) {
-		var lastMonth = today.getMonth();
-		month = today.getFullYear() + "-" + lastMonth
-	} else {
-		today = new Date(month.substr(0,4), month.substr(6,2), 1)
-	}
-	if (!month.match(regexMonth)) {
-		console.error("Month must be in the format: 2018-11");
-		return;
-	}
 
-	getProjects();
+	getLogs();
+	getProducts();
 }
 
-var endOfMonth = function() {
-	var endOfMonth = new Date(today.getFullYear(), today.getMonth(), 0);
-	return endOfMonth.getFullYear() + "-" + (endOfMonth.getMonth() + 1) + "-" + endOfMonth.getDate();
+var getProductsCallback = function () {
+	getCustomers();
+}
+var getCustomersCallback = function() {
+	createInvoices();
 }
 
-var getProjects = function () {
-
-	var parameters = {
-		"since": month + "-01",
-		"until": endOfMonth(),
-		"workspace_id": workspaceId,
-		"user_agent": "stanwood",
-		"billable": true
-	}
-	var url = togglSummaryUrl + parametersToQuery(parameters);
-	console.log(url);
-	request(
-		{
-			url: url,
-			headers: togglHeaders
-		},
-		function (error, response, body) {
-			console.log('error:', error);
-			console.log('statusCode:', response && response.statusCode);
-			//console.log('body:', body);
-
-			if (response && response.statusCode == 200) {
-				projects = JSON.parse(body).data
-				getProducts();
-			}
-		});
+var getLogs = function () {
+	logs = JSON.parse(fs.readFileSync(logsFilename, 'utf8'));
 }
 
 var getProducts = function () {
@@ -121,7 +60,7 @@ var getProducts = function () {
 
 			if (response && response.statusCode == 200) {
 				products = JSON.parse(body)
-				getCustomers();
+				getProductsCallback();
 			}
 		});
 }
@@ -140,57 +79,75 @@ var getCustomers = function () {
 
 			if (response && response.statusCode == 200) {
 				customers = JSON.parse(body)
-				createInvoices();
+				getCustomersCallback();
 			}
 		});
 }
 
-var togglSku = function(project) {
-	var indexOf = project.title.project.indexOf(" - ");
-	return project.title.project.substr(0, indexOf);
+var projectSku = function(log) {
+	var indexOf = log.project.indexOf(" - ");
+	return log.project.substr(0, indexOf);
+}
+var clientSku = function(log) {
+	var indexOf = log.client.indexOf(" - ");
+	return log.client.substr(0, indexOf);
 }
 
 
 var createInvoices = function () {
 
-	for (var i = 0; i < projects.length; i++) {
+	var projectTitles = [];
+	logs.forEach(function(log){
+		var projectTitle = projectSku(log);
+		if(projectTitles.indexOf(projectTitle) === -1) {
+			projectTitles.push(projectTitle);
+		}
+	});
 
-		var project = projects[i];
-		var indexOf = project.title.project.indexOf(" - ");
-		if (indexOf > 0) {
-			var product = getProduct(project);
-			var customer = getCustomer(project);
-			if (product && customer && (projectKey == null || projectKey == togglSku(project))) {
-				getAttachment(project);
-			}
+	for (var i = 0; i < projectTitles.length; i++) {
+		var projectTitle = projectTitles[i];
+		var product = getProduct(projectTitle );
+		var customer = getCustomer(projectTitle );
+		if (product && customer && (projectKey == null || projectKey == projectTitle)) {
+			createInvoice(projectTitle )
 		}
 	}
 }
 
-var getProduct = function (project) {
+var getProduct = function (projectTitle ) {
+
+	if (!projectTitle ) {
+		console.error("Project " + projectTitle + " has no client in Toggl.");
+		return;
+	}
 
 	for (var j = 0; j < products.length; j++) {
 
 		var product = products[j];
 		var debitoorSku = product.sku
-		if (debitoorSku == togglSku(project)) {
+		if (debitoorSku == projectTitle) {
 			//console.log(project.title.project);
 			return product;
 		}
 	}
-	console.error("Could not find product for " + project.title.project);
+	console.error("Could not find product for " + projectTitle );
 }
 
-var getCustomer = function (project) {
+var getCustomer = function (projectTitle) {
 
-	var indexOf = project.title.client.indexOf(" - ");
-	var clientId = project.title.client.substr(0, indexOf);
+	var log = {};
+	logs.forEach(function(localLog){
+		if (projectSku(localLog) === projectTitle) {
+			log = localLog;
+			return;
+		}
+	});
 
 	for (var j = 0; j < customers.length; j++) {
 
 		var customer = customers[j];
 		var debitoorSku = customer.notes
-		if (debitoorSku == clientId) {
+		if (debitoorSku == clientSku(log)) {
 			//console.log(project.title.client);
 			return customer;
 		}
@@ -198,75 +155,24 @@ var getCustomer = function (project) {
 	console.error("Could not find customer for " + project.title.client);
 }
 
-var getAttachment = function (project) {
 
-	var parameters = {
-		"since": month + "-01",
-		"until": endOfMonth(),
-		"workspace_id": workspaceId,
-		"user_agent": "stanwood",
-		"project_ids": project.id
+var createInvoice = function (projectTitle) {
+
+	var product = getProduct(projectTitle);
+	var customer = getCustomer(projectTitle);
+
+	if (product == null) {
+		console.error("Project " + projectTitle + " has no project in logs.");
+		return;
 	}
-	var url = togglDetailsUrl + parametersToQuery(parameters);
-	console.log(url);
-	//console.log(headers);
-	request(
-		{
-			url: url,
-			headers: togglHeaders,
-			encoding: 'binary'
-		},
-		function (error, response, body) {
-
-			if (response && response.statusCode == 200) {
-				uploadAttachment(body, project);
-			} else {
-				console.log('error:', error);
-				console.log('statusCode:', response && response.statusCode);
-				console.log('body:', body);
-			}
-		});
-}
-
-var uploadAttachment = function (body, project) {
-
-	var parameters = {
-		"token": debitoorKey,
-		"fileName": 'worklog.pdf',
-	};
-	var url = uploadFilesUrl + parametersToQuery(parameters);
-	console.log(url);
-
-	var base64data = new Buffer(body, 'binary');
-
-	var formData = {
-		file: base64data
-	};
-
-	request.post({
-			url,
-			formData: formData,
-		},
-		function (error, response, body) {
-			if (response && response.statusCode == 200) {
-				console.log(body);
-				var fileId = JSON.parse(body).id;
-				createInvoice(project, fileId)
-			} else {
-				console.log("request body: ", requestBody);
-				console.log('error:', error);
-				console.log('statusCode:', response && response.statusCode);
-				console.error('response body: ', body);
-			}
-		});
-}
-
-var createInvoice = function (project, fileId) {
-
-	var product = getProduct(project);
-	var customer = getCustomer(project);
+	if (customer == null) {
+		console.error("Project " + projectTitle + " has no customer in logs.");
+		return;
+	}
 
 	var today = new Date;
+	var lastMonth = today.getMonth();
+	var	month = today.getFullYear() + "-" + lastMonth
 	var todayDateString = dateFormat(today, "yyyy-mm-dd");
 	var invoiceNumber = product.sku + month.replace("-", "") + dateFormat(today, "mmdd"); //" " to force string
 
@@ -282,6 +188,26 @@ var createInvoice = function (project, fileId) {
 	var monthOfService = customer.countryCode == "GB" ? "\nMonth of service: " : "\nLeistungsmonat: ";
 	notes += monthOfService + month;
 
+	var lines = [];
+	logs.forEach(function(localLog){
+		if (projectSku(localLog) === projectTitle) {
+			var line = {
+				quantity: Number((localLog.total_hours).toFixed(1)), // In hours
+				unitId: 1, // Hours
+				taxEnabled: product.taxEnabled,
+				taxRate: product.rate,
+				unitNetPrice: product.netUnitSalesPrice,
+				productName: localLog.task + (localLog.description.length > 0 ? ": " + localLog.description : "")
+			};
+			if (customer.countryCode != "DE") { //Non-EU required, in EU not allowed
+				line["productOrService"] = "service";
+			}
+			lines.push(line);
+
+		}
+	});
+	console.log(lines);
+
 	var invoice =
 	{
 		number: invoiceNumber,
@@ -289,24 +215,8 @@ var createInvoice = function (project, fileId) {
 		date: todayDateString,
 		paymentTermsId: paymentTermsId,
 		customerId: customer.id,
-		lines: [
-			{
-				quantity: Math.round(project.time / (msecsInSecs * minutesInHour * secondsInMinute)),
-				productId: product.id,
-				taxEnabled: product.taxEnabled,
-				taxRate: product.rate,
-				unitNetPrice: product.netUnitSalesPrice,
-				unitId: 1,
-				productName: product.name
-			}
-		],
-		languageCode: languageCode,
-		attachments: [{ fileId: fileId }
-		]
-	}
-
-	if (customer.countryCode != "DE") {
-		invoice.lines[0]["productOrService"] = "service";
+		lines: lines,
+		languageCode: languageCode
 	}
 
 	var requestBody = JSON.stringify(invoice);
