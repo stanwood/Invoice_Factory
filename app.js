@@ -96,6 +96,7 @@ var clientSku = function(log) {
 
 var createInvoices = function () {
 
+	console.log("Creating invoices from " + logs.length + " logs");
 	var projectTitles = [];
 	logs.forEach(function(log){
 		var projectTitle = projectSku(log);
@@ -104,10 +105,16 @@ var createInvoices = function () {
 		}
 	});
 
+	console.log("Creating invoices for " + projectTitles.length + " projects");
+
 	for (var i = 0; i < projectTitles.length; i++) {
 		var projectTitle = projectTitles[i];
-		var product = getProduct(projectTitle );
-		var customer = getCustomer(projectTitle );
+		var product = getProduct(projectTitle);
+		var customer = getCustomer(projectTitle);
+		console.log(projectTitle)
+		console.log(product.name)
+		console.log(customer.name)
+		console.log(projectKey);
 		if (product && customer && (projectKey == null || projectKey == projectTitle)) {
 			createInvoice(projectTitle )
 		}
@@ -158,6 +165,8 @@ var getCustomer = function (projectTitle) {
 
 var createInvoice = function (projectTitle) {
 
+	console.log("Creating invoice for " + projectTitle);
+
 	var product = getProduct(projectTitle);
 	var customer = getCustomer(projectTitle);
 
@@ -197,7 +206,7 @@ var createInvoice = function (projectTitle) {
 				taxEnabled: product.taxEnabled,
 				taxRate: product.rate,
 				unitNetPrice: product.netUnitSalesPrice,
-				productName: localLog.task + (localLog.description.length > 0 ? ": " + localLog.description : "")
+				productName: localLog.task + (localLog.platform.length > 0 ? " " + localLog.platform : "") + (localLog.description.length > 0 ? ": " + localLog.description : "")
 			};
 			if (customer.countryCode != "DE") { //Non-EU required, in EU not allowed
 				line["productOrService"] = "service";
@@ -206,7 +215,7 @@ var createInvoice = function (projectTitle) {
 
 		}
 	});
-	console.log(lines);
+	//console.log(lines);
 
 	var invoice =
 	{
